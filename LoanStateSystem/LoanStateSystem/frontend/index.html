@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema de Préstamos Bancarios — Patrón State</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── TOKENS ───────────────────────────────────────── */
+    :root {
+      --ink:      #0d1117;
+      --ink-soft: #3a4453;
+      --surface:  #f5f7fa;
+      --card:     #ffffff;
+      --border:   #e2e6ed;
+      --accent:   #1a56db;
+      --accent-2: #7c3aed;
+      --green:    #059669;
+      --red:      #dc2626;
+      --amber:    #d97706;
+      --sky:      #0284c7;
+      --mono:     'JetBrains Mono', monospace;
+      --sans:     'Sora', sans-serif;
+    }
+
+    /* ─── RESET ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; scroll-behavior: smooth; }
+    body {
+      font-family: var(--sans);
+      background: var(--surface);
+      color: var(--ink);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ─── HEADER ────────────────────────────────────────── */
+    header {
+      background: var(--ink);
+      color: #fff;
+      padding: 1.5rem 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 3px solid var(--accent);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: .75rem; }
+    .logo-mark {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: .85rem; letter-spacing: -.5px;
+    }
+    .logo-text { font-weight: 700; font-size: 1.05rem; letter-spacing: -.3px; }
+    .logo-sub  { font-size: .7rem; color: #94a3b8; letter-spacing: .5px; text-transform: uppercase; }
+    .badge-pattern {
+      font-family: var(--mono);
+      font-size: .7rem;
+      background: rgba(124,58,237,.25);
+      border: 1px solid rgba(124,58,237,.4);
+      color: #a78bfa;
+      padding: .25rem .75rem;
+      border-radius: 999px;
+    }
+
+    /* ─── LAYOUT ────────────────────────────────────────── */
+    .shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    /* ─── PANEL (left) ──────────────────────────────────── */
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+      position: sticky; top: 80px;
+    }
+    .panel-head {
+      background: var(--ink);
+      color: #fff;
+      padding: 1rem 1.25rem;
+      font-size: .8rem;
+      font-weight: 600;
+      letter-spacing: .6px;
+      text-transform: uppercase;
+    }
+    .form-body { padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+    label { font-size: .78rem; font-weight: 600; color: var(--ink-soft); display: block; margin-bottom: .3rem; letter-spacing: .3px; }
+    input, select {
+      width: 100%; padding: .6rem .85rem;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-family: var(--sans);
+      font-size: .88rem;
+      color: var(--ink);
+      background: var(--surface);
+      transition: border-color .2s;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); background: #fff; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+
+    .btn-create {
+      width: 100%;
+      padding: .75rem;
+      background: var(--ink);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--sans);
+      font-size: .88rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: .2px;
+      transition: background .2s, transform .1s;
+    }
+    .btn-create:hover { background: var(--accent); }
+    .btn-create:active { transform: scale(.98); }
+
+    /* state map in panel */
+    .state-map {
+      margin: 0 1.25rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      background: var(--surface);
+    }
+    .state-map-title { font-size: .7rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-soft); margin-bottom: .75rem; }
+    .flow {
+      display: flex; flex-wrap: wrap; gap: .3rem .2rem;
+      align-items: center; font-size: .72rem;
+    }
+    .s-pill {
+      padding: .2rem .6rem;
+      border-radius: 5px;
+      font-weight: 600;
+      font-family: var(--mono);
+      font-size: .68rem;
+    }
+    .s-arrow { color: #94a3b8; font-size: .8rem; }
+    .s-draft     { background: #e0e7ff; color: #3730a3; }
+    .s-review    { background: #fef3c7; color: #92400e; }
+    .s-approved  { background: #d1fae5; color: #065f46; }
+    .s-active    { background: #dbeafe; color: #1e40af; }
+    .s-closed    { background: #f1f5f9; color: #475569; }
+    .s-rejected  { background: #fee2e2; color: #991b1b; }
+    .s-defaulted { background: #fce7f3; color: #9d174d; }
+
+    /* ─── MAIN AREA (right) ─────────────────────────────── */
+    .main-col { display: flex; flex-direction: column; gap: 1.25rem; }
+
+    /* ─── LOAN CARD ─────────────────────────────────────── */
+    .loan-card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      animation: slideIn .25s ease;
+    }
+    @keyframes slideIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+
+    .card-head {
+      padding: 1rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(90deg, #f8faff, #fff);
+    }
+    .card-id    { font-family: var(--mono); font-size: .85rem; font-weight: 600; color: var(--accent); }
+    .card-name  { font-size: .88rem; color: var(--ink-soft); margin-top: .1rem; }
+
+    .state-chip {
+      padding: .3rem .9rem;
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 700;
+      font-family: var(--mono);
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      transition: all .3s;
+    }
+    .chip-DRAFT      { background: #e0e7ff; color: #3730a3; }
+    .chip-UNDER_REVIEW { background: #fef3c7; color: #92400e; }
+    .chip-APPROVED   { background: #d1fae5; color: #065f46; }
+    .chip-ACTIVE     { background: #dbeafe; color: #1e40af; }
+    .chip-CLOSED     { background: #f1f5f9; color: #475569; }
+    .chip-REJECTED   { background: #fee2e2; color: #991b1b; }
+    .chip-DEFAULTED  { background: #fce7f3; color: #9d174d; }
+
+    .card-body {
+      padding: 1.1rem 1.25rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: .75rem 1rem;
+    }
+    .metric label  { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--ink-soft); }
+    .metric .value { font-size: 1.05rem; font-weight: 700; margin-top: .1rem; }
+    .metric .value.green { color: var(--green); }
+    .metric .value.red   { color: var(--red); }
+    .metric .value.blue  { color: var(--sky); }
+
+    /* progress bar */
+    .progress-wrap { padding: 0 1.25rem .75rem; }
+    .progress-label { display: flex; justify-content: space-between; font-size: .72rem; color: var(--ink-soft); margin-bottom: .35rem; }
+    .progress-bar { height: 6px; background: var(--border); border-radius: 999px; overflow: hidden; }
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width .6s cubic-bezier(.4,0,.2,1);
+    }
+
+    /* action buttons */
+    .card-actions {
+      border-top: 1px solid var(--border);
+      padding: .9rem 1.25rem;
+      display: flex; flex-wrap: wrap; gap: .5rem;
+    }
+    .action-btn {
+      padding: .45rem 1rem;
+      border-radius: 7px;
+      border: 1.5px solid transparent;
+      font-family: var(--sans);
+      font-size: .78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .18s;
+    }
+    .action-btn:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-submit   { background: #eff6ff; color: var(--accent); border-color: #bfdbfe; }
+    .btn-submit:hover:not(:disabled)   { background: var(--accent); color: #fff; }
+    .btn-approve  { background: #f0fdf4; color: var(--green); border-color: #bbf7d0; }
+    .btn-approve:hover:not(:disabled)  { background: var(--green); color: #fff; }
+    .btn-reject   { background: #fef2f2; color: var(--red); border-color: #fecaca; }
+    .btn-reject:hover:not(:disabled)   { background: var(--red); color: #fff; }
+    .btn-disburse { background: #fefce8; color: var(--amber); border-color: #fde68a; }
+    .btn-disburse:hover:not(:disabled) { background: var(--amber); color: #fff; }
+    .btn-pay      { background: #f0f9ff; color: var(--sky); border-color: #bae6fd; }
+    .btn-pay:hover:not(:disabled)      { background: var(--sky); color: #fff; }
+    .btn-default  { background: #fdf4ff; color: var(--accent-2); border-color: #e9d5ff; }
+    .btn-default:hover:not(:disabled)  { background: var(--accent-2); color: #fff; }
+
+    /* payment input inline */
+    .pay-row { display: flex; align-items: center; gap: .4rem; }
+    .pay-input {
+      width: 100px; padding: .42rem .65rem;
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      font-size: .8rem; font-family: var(--sans);
+      outline: none;
+    }
+    .pay-input:focus { border-color: var(--sky); }
+
+    /* log */
+    .log-area {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .log-head {
+      padding: .8rem 1.25rem;
+      background: var(--ink);
+      color: #fff;
+      font-size: .78rem;
+      font-weight: 600;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .log-clear { background: none; border: 1px solid rgba(255,255,255,.2); color: #94a3b8; font-size: .7rem; padding: .2rem .6rem; border-radius: 5px; cursor: pointer; font-family: var(--sans); }
+    .log-clear:hover { color: #fff; border-color: rgba(255,255,255,.4); }
+    .log-body { padding: .75rem 1.25rem; max-height: 260px; overflow-y: auto; }
+    .log-entry {
+      display: flex; gap: .75rem; align-items: flex-start;
+      padding: .45rem 0;
+      border-bottom: 1px solid var(--surface);
+      font-size: .78rem;
+      animation: fadeRow .2s ease;
+    }
+    @keyframes fadeRow { from { opacity:0; } to { opacity:1; } }
+    .log-time   { font-family: var(--mono); color: #94a3b8; flex-shrink: 0; font-size: .72rem; padding-top: .05rem; }
+    .log-msg    { color: var(--ink-soft); }
+    .log-msg.ok   { color: var(--green); }
+    .log-msg.err  { color: var(--red); }
+    .log-msg.info { color: var(--sky); }
+    .log-msg.warn { color: var(--amber); }
+    .log-empty  { color: #94a3b8; font-size: .8rem; padding: .5rem 0; font-style: italic; }
+
+    /* empty state */
+    .empty-loans {
+      background: var(--card);
+      border: 1.5px dashed var(--border);
+      border-radius: 14px;
+      padding: 3rem 2rem;
+      text-align: center;
+      color: #94a3b8;
+    }
+    .empty-icon { font-size: 2.5rem; margin-bottom: .75rem; }
+    .empty-loans p { font-size: .88rem; }
+
+    /* toast */
+    #toast {
+      position: fixed; bottom: 2rem; right: 2rem;
+      background: var(--ink);
+      color: #fff;
+      padding: .75rem 1.25rem;
+      border-radius: 10px;
+      font-size: .82rem;
+      font-weight: 500;
+      box-shadow: 0 8px 30px rgba(0,0,0,.2);
+      transform: translateY(20px);
+      opacity: 0;
+      transition: all .25s;
+      z-index: 999;
+      max-width: 300px;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+
+    @media (max-width: 800px) {
+      .shell { grid-template-columns: 1fr; }
+      .panel { position: static; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ───────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">BS</div>
+    <div>
+      <div class="logo-text">BancoSmart — Gestión de Préstamos</div>
+      <div class="logo-sub">Sistema de crédito en tiempo real</div>
+    </div>
+  </div>
+  <span class="badge-pattern">Patrón State · Java Backend</span>
+</header>
+
+<!-- ── SHELL ─────────────────────────────────────────────── -->
+<div class="shell">
+
+  <!-- ── LEFT PANEL ─────────────────────────────────────── -->
+  <aside>
+    <div class="panel">
+      <div class="panel-head">📋 Solicitar Préstamo</div>
+      <div class="form-body">
+        <div>
+          <label>ID del Préstamo</label>
+          <input id="f-id" type="text" value="LN-2026-001" placeholder="LN-2026-001" />
+        </div>
+        <div>
+          <label>Nombre del Cliente</label>
+          <input id="f-client" type="text" placeholder="Ej. María García" />
+        </div>
+        <div class="field-row">
+          <div>
+            <label>Monto Solicitado ($)</label>
+            <input id="f-amount" type="number" value="10000" min="500" />
+          </div>
+          <div>
+            <label>Plazo (meses)</label>
+            <input id="f-term" type="number" value="24" min="6" max="120" />
+          </div>
+        </div>
+        <div>
+          <label>Tasa de Interés Anual</label>
+          <select id="f-rate">
+            <option value="0.08">8% — Preferencial</option>
+            <option value="0.12" selected>12% — Estándar</option>
+            <option value="0.15">15% — Comercial</option>
+            <option value="0.18">18% — Libre inversión</option>
+            <option value="0.24">24% — Microcrédito</option>
+          </select>
+        </div>
+        <button class="btn-create" onclick="createLoan()">＋ Crear Préstamo</button>
+      </div>
+
+      <div class="state-map">
+        <div class="state-map-title">Diagrama de transiciones</div>
+        <div class="flow">
+          <span class="s-pill s-draft">DRAFT</span>
+          <span class="s-arrow">→</span>
+          <span class="s-pill s-review">UNDER_REVIEW</span>
+          <span class="s-arrow">→</span>
+          <span class="s-pill s-approved">APPROVED</span>
+          <span class="s-arrow">→</span>
+          <span class="s-pill s-active">ACTIVE</span>
+          <span class="s-arrow">→</span>
+          <span class="s-pill s-closed">CLOSED</span>
+        </div>
+        <div class="flow" style="margin-top:.5rem">
+          <span class="s-pill s-review">UNDER_REVIEW</span>
+          <span class="s-arrow">→</span>
+          <span class="s-pill s-rejected">REJECTED</span>
+        </div>
+        <div class="flow" style="margin-top:.5rem">
+          <span class="s-pill s-active">ACTIVE</span>
+          <span class="s-arrow">→</span>
+          <span class="s-pill s-defaulted">DEFAULTED</span>
+          <span class="s-arrow">→</span>
+          <span class="s-pill s-closed">CLOSED</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── RIGHT MAIN ──────────────────────────────────────── -->
+  <div class="main-col">
+
+    <!-- Loans container -->
+    <div id="loans-container">
+      <div class="empty-loans">
+        <div class="empty-icon">🏦</div>
+        <p>No hay préstamos registrados aún.<br/>Crea uno con el formulario de la izquierda.</p>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="log-area">
+      <div class="log-head">
+        📋 Registro de Eventos
+        <button class="log-clear" onclick="clearLog()">Limpiar</button>
+      </div>
+      <div class="log-body" id="log-body">
+        <div class="log-empty">Los eventos del sistema aparecerán aquí...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   STATE PATTERN — JavaScript implementation
+   Mirrors the Java backend structure exactly:
+   • LoanState interface (as JS objects with methods)
+   • Concrete States: Draft, UnderReview, Approved,
+                      Active, Rejected, Closed, Defaulted
+   • Loan class (Context)
+   • AuditLogger (Observer)
+═══════════════════════════════════════════════════════════ */
+
+// ── State implementations ─────────────────────────────────
+
+class DraftState {
+  submit(loan)             { loan.transitionTo(new UnderReviewState()); addLog(`[${loan.id}] Solicitud enviada para revisión de crédito.`, 'ok'); }
+  approve(loan)            { addLog(`[DRAFT] ✘ No se puede aprobar sin enviar la solicitud.`, 'err'); }
+  reject(loan)             { addLog(`[DRAFT] ✘ No se puede rechazar sin enviar la solicitud.`, 'err'); }
+  disburse(loan)           { addLog(`[DRAFT] ✘ No se pueden desembolsar fondos antes de la aprobación.`, 'err'); }
+  registerPayment(loan, n) { addLog(`[DRAFT] ✘ No hay pago aplicable. El préstamo está en borrador.`, 'err'); }
+  close(loan)              { addLog(`[DRAFT] ✘ No se puede cerrar un préstamo que nunca fue activado.`, 'err'); }
+  flagAsDefault(loan)      { addLog(`[DRAFT] ✘ No se puede marcar como incumplido.`, 'err'); }
+  name() { return 'DRAFT'; }
+}
+
+class UnderReviewState {
+  submit(loan)             { addLog(`[UNDER_REVIEW] ✘ La solicitud ya fue enviada y está en revisión.`, 'err'); }
+  approve(loan)            { loan.transitionTo(new ApprovedState()); addLog(`[${loan.id}] ✔ Análisis crediticio aprobado. Préstamo aprobado.`, 'ok'); }
+  reject(loan)             { loan.transitionTo(new RejectedState()); addLog(`[${loan.id}] Análisis crediticio fallido. Préstamo rechazado.`, 'warn'); }
+  disburse(loan)           { addLog(`[UNDER_REVIEW] ✘ Debe aprobar primero.`, 'err'); }
+  registerPayment(loan, n) { addLog(`[UNDER_REVIEW] ✘ No se puede registrar pago. El préstamo no ha sido desembolsado.`, 'err'); }
+  close(loan)              { addLog(`[UNDER_REVIEW] ✘ No se puede cerrar un préstamo en revisión.`, 'err'); }
+  flagAsDefault(loan)      { addLog(`[UNDER_REVIEW] ✘ No se puede marcar como incumplido.`, 'err'); }
+  name() { return 'UNDER_REVIEW'; }
+}
+
+class ApprovedState {
+  submit(loan)             { addLog(`[APPROVED] ✘ Ya fue aprobado, no aplica reenvío.`, 'err'); }
+  approve(loan)            { addLog(`[APPROVED] ✘ El préstamo ya está aprobado.`, 'err'); }
+  reject(loan)             { loan.transitionTo(new RejectedState()); addLog(`[${loan.id}] Aprobación revocada. Préstamo rechazado.`, 'warn'); }
+  disburse(loan)           { loan.transitionTo(new ActiveState()); addLog(`[${loan.id}] ✔ Fondos desembolsados. El préstamo está ahora ACTIVO.`, 'ok'); }
+  registerPayment(loan, n) { addLog(`[APPROVED] ✘ No se puede registrar pago. Los fondos aún no han sido desembolsados.`, 'err'); }
+  close(loan)              { addLog(`[APPROVED] ✘ No se puede cerrar sin activar el préstamo primero.`, 'err'); }
+  flagAsDefault(loan)      { addLog(`[APPROVED] ✘ No se puede marcar como incumplido.`, 'err'); }
+  name() { return 'APPROVED'; }
+}
+
+class ActiveState {
+  submit(loan)             { addLog(`[ACTIVE] ✘ El préstamo ya está activo.`, 'err'); }
+  approve(loan)            { addLog(`[ACTIVE] ✘ El préstamo ya está aprobado y activo.`, 'err'); }
+  reject(loan)             { addLog(`[ACTIVE] ✘ No se puede rechazar un préstamo activo.`, 'err'); }
+  disburse(loan)           { addLog(`[ACTIVE] ✘ Los fondos ya fueron desembolsados.`, 'err'); }
+  registerPayment(loan, amount) {
+    if (amount <= 0) { addLog(`✘ El monto del pago debe ser mayor a cero.`, 'err'); return; }
+    const prev = loan.balance;
+    loan.balance = Math.max(0, loan.balance - amount);
+    addLog(`[${loan.id}] ✔ Pago de $${amount.toFixed(2)} registrado. Saldo anterior: $${prev.toFixed(2)} → Nuevo saldo: $${loan.balance.toFixed(2)}`, 'ok');
+    if (loan.balance <= 0) {
+      addLog(`[${loan.id}] Saldo en cero. Cerrando préstamo automáticamente.`, 'info');
+      this.close(loan);
+    }
+  }
+  close(loan) {
+    if (loan.balance > 0) { addLog(`[ACTIVE] ✘ Saldo pendiente: $${loan.balance.toFixed(2)}. No se puede cerrar.`, 'err'); return; }
+    loan.transitionTo(new ClosedState());
+    addLog(`[${loan.id}] ✔ Préstamo pagado en su totalidad. Cerrado exitosamente.`, 'ok');
+  }
+  flagAsDefault(loan)      { loan.transitionTo(new DefaultedState()); addLog(`[${loan.id}] ⚠ Préstamo marcado como INCUMPLIDO por pagos vencidos.`, 'warn'); }
+  name() { return 'ACTIVE'; }
+}
+
+class RejectedState {
+  submit(loan)             { addLog(`[REJECTED] ✘ Este préstamo fue rechazado. Cree una nueva solicitud.`, 'err'); }
+  approve(loan)            { addLog(`[REJECTED] ✘ No se puede aprobar un préstamo rechazado.`, 'err'); }
+  reject(loan)             { addLog(`[REJECTED] ✘ El préstamo ya está en estado rechazado.`, 'err'); }
+  disburse(loan)           { addLog(`[REJECTED] ✘ No se puede desembolsar un préstamo rechazado.`, 'err'); }
+  registerPayment(loan, n) { addLog(`[REJECTED] ✘ No aplica pago en un préstamo rechazado.`, 'err'); }
+  close(loan)              { addLog(`[REJECTED] ✘ El préstamo ya fue cerrado (rechazado).`, 'err'); }
+  flagAsDefault(loan)      { addLog(`[REJECTED] ✘ No se puede marcar como incumplido.`, 'err'); }
+  name() { return 'REJECTED'; }
+}
+
+class ClosedState {
+  submit(loan)             { addLog(`[CLOSED] ✘ El préstamo está cerrado. No se permiten más acciones.`, 'err'); }
+  approve(loan)            { addLog(`[CLOSED] ✘ El préstamo está cerrado.`, 'err'); }
+  reject(loan)             { addLog(`[CLOSED] ✘ El préstamo está cerrado.`, 'err'); }
+  disburse(loan)           { addLog(`[CLOSED] ✘ El préstamo está cerrado.`, 'err'); }
+  registerPayment(loan, n) { addLog(`[CLOSED] ✘ El préstamo ya fue pagado en su totalidad.`, 'err'); }
+  close(loan)              { addLog(`[CLOSED] ✘ El préstamo ya está cerrado.`, 'err'); }
+  flagAsDefault(loan)      { addLog(`[CLOSED] ✘ No se puede marcar como incumplido un préstamo cerrado.`, 'err'); }
+  name() { return 'CLOSED'; }
+}
+
+class DefaultedState {
+  submit(loan)             { addLog(`[DEFAULTED] ✘ No se puede enviar. Préstamo en incumplimiento.`, 'err'); }
+  approve(loan)            { addLog(`[DEFAULTED] ✘ No se puede aprobar. Préstamo en incumplimiento.`, 'err'); }
+  reject(loan)             { addLog(`[DEFAULTED] ✘ No se puede rechazar. Préstamo en incumplimiento.`, 'err'); }
+  disburse(loan)           { addLog(`[DEFAULTED] ✘ No se puede desembolsar. Préstamo en incumplimiento.`, 'err'); }
+  registerPayment(loan, amount) {
+    if (amount <= 0) { addLog(`✘ El monto de recuperación debe ser mayor a cero.`, 'err'); return; }
+    const prev = loan.balance;
+    loan.balance = Math.max(0, loan.balance - amount);
+    addLog(`[${loan.id}] ✔ Pago de recuperación de $${amount.toFixed(2)} registrado. Deuda restante: $${loan.balance.toFixed(2)}`, 'warn');
+    if (loan.balance <= 0) {
+      addLog(`[${loan.id}] Deuda recuperada completamente. Cerrando préstamo.`, 'info');
+      this.close(loan);
+    }
+  }
+  close(loan) {
+    if (loan.balance > 0) { addLog(`[DEFAULTED] ✘ Deuda restante: $${loan.balance.toFixed(2)}.`, 'err'); return; }
+    loan.transitionTo(new ClosedState());
+    addLog(`[${loan.id}] ✔ Deuda recuperada. Préstamo cerrado.`, 'ok');
+  }
+  flagAsDefault(loan)      { addLog(`[DEFAULTED] ✘ El préstamo ya está en estado de incumplimiento.`, 'err'); }
+  name() { return 'DEFAULTED'; }
+}
+
+// ── Loan class (Context) ──────────────────────────────────
+
+class Loan {
+  constructor(id, client, amount, rate, termMonths) {
+    this.id          = id;
+    this.client      = client;
+    this.original    = amount;
+    this.balance     = amount + (amount * rate * (termMonths / 12));
+    this.total       = this.balance;
+    this.rate        = rate;
+    this.termMonths  = termMonths;
+    this.state       = new DraftState();
+    this.history     = [];
+  }
+  transitionTo(newState) {
+    const from = this.state.name();
+    this.state = newState;
+    this.history.push({ from, to: newState.name(), at: new Date() });
+    addLog(`→ Transición: [${from}] ──► [${newState.name()}]`, 'info');
+    renderLoans();
+  }
+  get stateName() { return this.state.name(); }
+  get paidPct() { return Math.min(100, ((this.total - this.balance) / this.total) * 100); }
+}
+
+// ── State ────────────────────────────────────────────────
+
+const loans = [];
+
+function createLoan() {
+  const id     = document.getElementById('f-id').value.trim();
+  const client = document.getElementById('f-client').value.trim();
+  const amount = parseFloat(document.getElementById('f-amount').value);
+  const term   = parseInt(document.getElementById('f-term').value);
+  const rate   = parseFloat(document.getElementById('f-rate').value);
+
+  if (!id || !client || !amount || !term) { toast('⚠ Completa todos los campos'); return; }
+  if (loans.find(l => l.id === id)) { toast('⚠ Ya existe un préstamo con ese ID'); return; }
+
+  const loan = new Loan(id, client, amount, rate, term);
+  loans.push(loan);
+  addLog(`[${id}] Préstamo creado para ${client}. Monto: $${amount.toLocaleString()}. Estado inicial: DRAFT`, 'info');
+  renderLoans();
+  toast(`✔ Préstamo ${id} creado`);
+
+  // Auto-increment ID
+  const match = id.match(/(\d+)$/);
+  if (match) {
+    const next = String(parseInt(match[1]) + 1).padStart(3, '0');
+    document.getElementById('f-id').value = id.replace(/\d+$/, next);
+  }
+}
+
+// ── Rendering ────────────────────────────────────────────
+
+function renderLoans() {
+  const container = document.getElementById('loans-container');
+  if (loans.length === 0) {
+    container.innerHTML = `<div class="empty-loans"><div class="empty-icon">🏦</div><p>No hay préstamos registrados aún.<br/>Crea uno con el formulario de la izquierda.</p></div>`;
+    return;
+  }
+
+  container.innerHTML = loans.map((loan, i) => {
+    const st  = loan.stateName;
+    const pct = loan.paidPct.toFixed(1);
+    const terminal = ['CLOSED','REJECTED'].includes(st);
+    const active = st === 'ACTIVE' || st === 'DEFAULTED';
+
+    return `
+    <div class="loan-card">
+      <div class="card-head">
+        <div>
+          <div class="card-id">${loan.id}</div>
+          <div class="card-name">👤 ${loan.client}</div>
+        </div>
+        <span class="state-chip chip-${st}">${st.replace('_',' ')}</span>
+      </div>
+
+      <div class="card-body">
+        <div class="metric">
+          <label>Monto Original</label>
+          <div class="value blue">$${loan.original.toLocaleString('es-CO', {minimumFractionDigits:2})}</div>
+        </div>
+        <div class="metric">
+          <label>Saldo Pendiente</label>
+          <div class="value ${loan.balance > 0 ? 'red' : 'green'}">$${loan.balance.toFixed(2)}</div>
+        </div>
+        <div class="metric">
+          <label>Tasa / Plazo</label>
+          <div class="value">${(loan.rate*100).toFixed(0)}% / ${loan.termMonths}m</div>
+        </div>
+      </div>
+
+      ${active ? `
+      <div class="progress-wrap">
+        <div class="progress-label"><span>Progreso de pago</span><span>${pct}%</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </div>` : ''}
+
+      <div class="card-actions">
+        <button class="action-btn btn-submit"
+          onclick="loans[${i}].state.submit(loans[${i}]); renderLoans()"
+          ${['UNDER_REVIEW','APPROVED','ACTIVE','CLOSED','REJECTED','DEFAULTED'].includes(st) ? 'disabled' : ''}>
+          📤 Enviar
+        </button>
+        <button class="action-btn btn-approve"
+          onclick="loans[${i}].state.approve(loans[${i}]); renderLoans()"
+          ${st !== 'UNDER_REVIEW' ? 'disabled' : ''}>
+          ✔ Aprobar
+        </button>
+        <button class="action-btn btn-reject"
+          onclick="loans[${i}].state.reject(loans[${i}]); renderLoans()"
+          ${!['UNDER_REVIEW','APPROVED'].includes(st) ? 'disabled' : ''}>
+          ✘ Rechazar
+        </button>
+        <button class="action-btn btn-disburse"
+          onclick="loans[${i}].state.disburse(loans[${i}]); renderLoans()"
+          ${st !== 'APPROVED' ? 'disabled' : ''}>
+          💰 Desembolsar
+        </button>
+        <button class="action-btn btn-default"
+          onclick="loans[${i}].state.flagAsDefault(loans[${i}]); renderLoans()"
+          ${st !== 'ACTIVE' ? 'disabled' : ''}>
+          ⚠ Incumplimiento
+        </button>
+
+        ${active ? `
+        <div class="pay-row">
+          <input class="pay-input" type="number" id="pay-${i}" placeholder="$0.00" min="1" />
+          <button class="action-btn btn-pay"
+            onclick="registerPayment(${i})">
+            💳 Pagar
+          </button>
+        </div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function registerPayment(i) {
+  const input = document.getElementById(`pay-${i}`);
+  const amount = parseFloat(input.value);
+  if (!amount || amount <= 0) { toast('⚠ Ingresa un monto válido'); return; }
+  loans[i].state.registerPayment(loans[i], amount);
+  input.value = '';
+  renderLoans();
+}
+
+// ── Log ──────────────────────────────────────────────────
+
+function addLog(msg, type = 'info') {
+  const body = document.getElementById('log-body');
+  const empty = body.querySelector('.log-empty');
+  if (empty) empty.remove();
+
+  const now  = new Date();
+  const time = now.toTimeString().slice(0,8);
+  const div  = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<span class="log-time">${time}</span><span class="log-msg ${type}">${msg}</span>`;
+  body.prepend(div);
+}
+
+function clearLog() {
+  document.getElementById('log-body').innerHTML = '<div class="log-empty">Los eventos del sistema aparecerán aquí...</div>';
+}
+
+// ── Toast ─────────────────────────────────────────────────
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Init ──────────────────────────────────────────────────
+renderLoans();
+</script>
+</body>
+</html>
