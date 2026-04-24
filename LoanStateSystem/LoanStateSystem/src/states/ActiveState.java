@@ -1,3 +1,6 @@
+// Patron State: Interfaz base para todos los estados del prestamo
+feat: agregar interfaz LoanState - contrato del patron State
+
 package states;
 
 /**
